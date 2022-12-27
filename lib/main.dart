@@ -1,7 +1,7 @@
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:notify_1/next_page_view.dart';
 import 'firebase_options.dart';
 
@@ -13,13 +13,43 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   print("Handling a background message: ${message.messageId}");
 }
 
+Future<void> showNotification(
+  FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin, {
+  required String title,
+  required String body,
+}) async {
+  var androidChannelSpecifics = const AndroidNotificationDetails(
+    'CHANNEL_ID',
+    'CHANNEL_NAME',
+    importance: Importance.max,
+    priority: Priority.high,
+    playSound: true,
+    timeoutAfter: 5000,
+    styleInformation: DefaultStyleInformation(true, true),
+  );
+  var platformChannelSpecifics =
+      NotificationDetails(android: androidChannelSpecifics);
+  await flutterLocalNotificationsPlugin.show(
+    0,
+    title,
+    body, //null
+    platformChannelSpecifics,
+    payload: 'New Payload',
+  );
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   FirebaseMessaging messaging = FirebaseMessaging.instance;
-
+  FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+  Future selectNotification(String payload) async {
+    if (payload != null) {
+      debugPrint('notification payload: $payload');
+    }
+  }
   NotificationSettings settings = await messaging.requestPermission(
     alert: true,
     announcement: false,
@@ -29,21 +59,12 @@ void main() async {
     provisional: false,
     sound: true,
   );
-  // FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-  //   if (message.notification != null) {
-  //         print('Message also contained a notification: ${message.notification}');
-  //
-  //       }
-  //
-  // });
-  // FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-  //   print('Got a message whilst in the foreground!');
-  //   print('Message data: ${message.data}');
-  //
-  //   if (message.notification != null) {
-  //     print('Message also contained a notification: ${message.notification}');
-  //   }
-  // });
+  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+    if (message.notification != null) {
+      print('Message also contained a notification: ${message.notification}');
+    }
+  });
+
   messaging.getToken().then((token) => print('token: $token'));
   runApp(const MyApp());
 }
@@ -74,9 +95,28 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   int _counter = 0;
+  late FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin;
 
   @override
   void initState() {
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      print('Got a message whilst in the foreground!');
+      print('Message data: ${message.notification?.title}');
+
+      if (message.notification != null) {
+        print('Message also contained a notification: ${message.notification}');
+        showNotification(
+          flutterLocalNotificationsPlugin,
+          title: message.notification!.title!,
+          body:  message.notification!.body!,
+        );
+        if (message.notification != null) {
+          Navigator.push(context,
+              MaterialPageRoute(builder: (context) => const NextPageView()));
+        }
+      }
+    });
+    flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       if (message.notification != null) {
         Navigator.push(context,
@@ -111,10 +151,12 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             IconButton(
                 onPressed: () {
-                  Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => const NextPageView()));
+                  showNotification(
+                      flutterLocalNotificationsPlugin, title:  '12312312', body:  'adadafaf');
+                  // Navigator.push(
+                  //     context,
+                  //     MaterialPageRoute(
+                  //         builder: (context) => const NextPageView()));
                 },
                 icon: const Icon(Icons.confirmation_num_sharp))
           ],
